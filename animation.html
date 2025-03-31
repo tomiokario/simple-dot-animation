@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ドット絵ジャンプ＆歩行アニメーション</title>
+  <style>
+    canvas {
+      background-color: #222;
+      display: block;
+      margin: 10px auto;
+    }
+    button {
+      display: block;
+      margin: 10px auto;
+      padding: 8px 16px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="pixelCanvas" width="128" height="128"></canvas>
+  <button id="exportSprite">スプライトシートをダウンロード</button>
+  <button id="exportGif">GIFをダウンロード</button>
+  <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+  <script>
+    const canvas = document.getElementById('pixelCanvas');
+    const ctx = canvas.getContext('2d');
+    const scale = 8;
+    let posX = 0;
+    let direction = 1;
+    const framesToSave = [];
+
+    const walkFrames = [
+      [
+        '........','....X...','...XXX..','..XXXXX.','...XXX..','....X...','...X.X..','..X...X.'
+      ],[
+        '........','....X...','...X.X..','..XXXXX.','...XXX..','..X.X...','...X.X..','..X...X.'
+      ]
+    ];
+
+    const jumpFrames = [
+      [
+        '........','....X...','...XXX..','..XXXXX.','...XXX..','..X.X.X.','.X.....X','........'
+      ],[
+        '........','........','....X...','...XXX..','..XXXXX.','...X.X..','.X.....X','........'
+      ]
+    ];
+
+    let frame = 0;
+    let mode = 'walk';
+    let frameCount = 0;
+    const groundY = (canvas.height / scale) - 8;
+    const maxFramesToRecord = 24;
+
+    function drawFrame(sprite, offsetY, offsetX, save = false) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < sprite.length; y++) {
+        for (let x = 0; x < sprite[y].length; x++) {
+          if (sprite[y][x] === 'X') {
+            ctx.fillStyle = 'lime';
+            ctx.fillRect((x + offsetX) * scale, (y + groundY + offsetY) * scale, scale, scale);
+          }
+        }
+      }
+      if (save && framesToSave.length < maxFramesToRecord) {
+        const frameCanvas = document.createElement('canvas');
+        frameCanvas.width = canvas.width;
+        frameCanvas.height = canvas.height;
+        frameCanvas.getContext('2d').drawImage(canvas, 0, 0);
+        framesToSave.push(frameCanvas);
+      }
+    }
+
+    function animate() {
+      if (framesToSave.length >= maxFramesToRecord) return;
+
+      if (mode === 'walk') {
+        drawFrame(walkFrames[frame % walkFrames.length], 0, posX, true);
+        frame++;
+        frameCount++;
+        posX += direction;
+        if (posX > 8 || posX < 0) direction *= -1;
+        if (frameCount > 6) {
+          mode = 'jump';
+          frame = 0;
+        }
+      } else if (mode === 'jump') {
+        let jumpY = frame === 0 ? -1 : -2;
+        drawFrame(jumpFrames[frame % jumpFrames.length], jumpY, posX, true);
+        frame++;
+        if (frame >= jumpFrames.length) {
+          mode = 'walk';
+          frame = 0;
+          frameCount = 0;
+        }
+      }
+      setTimeout(animate, 300);
+    }
+
+    document.getElementById('exportSprite').addEventListener('click', () => {
+      if (framesToSave.length === 0) return;
+      const sheetCanvas = document.createElement('canvas');
+      sheetCanvas.width = canvas.width * framesToSave.length;
+      sheetCanvas.height = canvas.height;
+      const ctxSheet = sheetCanvas.getContext('2d');
+      framesToSave.forEach((frameCanvas, i) => {
+        ctxSheet.drawImage(frameCanvas, i * canvas.width, 0);
+      });
+      const link = document.createElement('a');
+      link.download = 'sprite_sheet.png';
+      link.href = sheetCanvas.toDataURL();
+      link.click();
+    });
+
+    document.getElementById('exportGif').addEventListener('click', () => {
+      const gif = new GIF({
+        workers: 2,
+        quality: 10,
+        width: canvas.width,
+        height: canvas.height,
+        workerScript: 'gif.worker.js'
+      });
+      framesToSave.forEach(frameCanvas => {
+        gif.addFrame(frameCanvas, { delay: 300 });
+      });
+      gif.on('finished', blob => {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'animation.gif';
+        link.click();
+      });
+      gif.render();
+    });
+
+    animate();
+  </script>
+</body>
+</html>
